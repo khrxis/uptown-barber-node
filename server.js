@@ -55,6 +55,62 @@ function publicState() {
 
 // ── middleware ───────────────────────────────────────────────
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Uptown-2018add';
+
+// Login page
+app.get('/login', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uptown Admin — Login</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0A0A0A;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui}
+  .box{background:#111;border:1px solid rgba(201,168,76,0.2);padding:48px 40px;width:100%;max-width:360px;text-align:center}
+  .logo{font-size:22px;font-weight:700;color:#C9A84C;letter-spacing:0.05em;margin-bottom:8px}
+  .sub{font-size:12px;color:#555;margin-bottom:32px;letter-spacing:0.1em;text-transform:uppercase}
+  input{width:100%;background:#0A0A0A;border:1px solid rgba(201,168,76,0.15);color:#fff;padding:14px 16px;font-size:14px;outline:none;margin-bottom:12px;transition:border-color 0.2s}
+  input:focus{border-color:#C9A84C}
+  button{width:100%;padding:14px;background:#C9A84C;color:#0A0A0A;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;border:none;cursor:pointer}
+  button:hover{background:#e8c96a}
+  .error{color:#ff5555;font-size:13px;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">✂ Uptown</div>
+  <div class="sub">Admin Access</div>
+  ${req.query.error ? '<div class="error">Incorrect password</div>' : ''}
+  <form method="POST" action="/login">
+    <input type="password" name="password" placeholder="Enter password" autofocus required>
+    <button type="submit">Enter Dashboard</button>
+  </form>
+</div>
+</body>
+</html>`);
+});
+
+app.post('/login', (req, res) => {
+  if (req.body.password === ADMIN_PASSWORD) {
+    res.cookie('admin_auth', ADMIN_PASSWORD, { httpOnly: true, maxAge: 8 * 60 * 60 * 1000 });
+    res.redirect('/admin.html');
+  } else {
+    res.redirect('/login?error=1');
+  }
+});
+
+// Protect admin.html
+app.use('/admin.html', (req, res, next) => {
+  const cookie = req.headers.cookie || '';
+  const valid = cookie.split(';').some(c => c.trim() === `admin_auth=${ADMIN_PASSWORD}`);
+  if (valid) return next();
+  res.redirect('/login');
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── REST ─────────────────────────────────────────────────────
