@@ -1,0 +1,38 @@
+[
+  {
+    "id": "c1bd4e64-f1b7-458d-a3ef-5d0718a38c96",
+    "name": "moahmmed ",
+    "phone": "+971568821240",
+    "service": "Classic Haircut",
+    "location": "Abu Dhabi",
+    "date": "2026-05-15",
+    "time": "2:00 PM",
+    "notes": "hi ",
+    "status": "completed",
+    "createdAt": "2026-05-02T11:07:18.600Z"
+  },
+  {
+    "id": "3923a1c0-905f-4b9d-a2e4-4b7714a0d180",
+    "name": "moh",
+    "phone": "8765432345678",
+    "service": "Classic Haircut",
+    "location": "Sharjah",
+    "date": "2026-05-30",
+    "time": "12:00 PM",
+    "notes": "hello",
+    "status": "declined",
+    "createdAt": "2026-05-02T11:14:23.882Z"
+  },
+  {
+    "id": "021bb080-424b-479a-8949-231fb2b52a10",
+    "name": "mohammed ",
+    "phone": "+971568821240",
+    "service": "Classic Haircut",
+    "location": "Abu Dhabi",
+    "date": "2026-05-21",
+    "time": "2:00 PM",
+    "notes": "call me an hour prior to the app",
+    "status": "completed",
+    "createdAt": "2026-05-02T20:33:30.317Z"
+  }
+]
