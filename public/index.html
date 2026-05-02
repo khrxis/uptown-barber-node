@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uptown Barbershop — Abu Dhabi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --gold: #C9A84C;
+    --gold-light: #e8c96a;
+    --black: #0A0A0A;
+    --dark: #111;
+    --mid: #1a1a1a;
+    --border: rgba(201,168,76,0.15);
+  }
+  html { scroll-behavior: smooth; }
+  body { background: var(--black); color: #fff; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+
+  /* STATUS BAR */
+  #status-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--black); border-bottom: 1px solid var(--border);
+    padding: 10px 24px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; font-weight: 500; letter-spacing: 0.05em; transition: all 0.3s;
+  }
+  #status-bar .logo { font-family: 'Bebas Neue'; font-size: 18px; color: var(--gold); letter-spacing: 0.1em; }
+  #status-bar .right { display: flex; gap: 20px; align-items: center; }
+  .status-pill {
+    padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .status-pill.open { background: rgba(201,168,76,0.15); color: var(--gold); border: 1px solid rgba(201,168,76,0.3); }
+  .status-pill.closed { background: rgba(255,60,60,0.1); color: #ff6060; border: 1px solid rgba(255,60,60,0.2); }
+  #queue-info { color: #888; }
+  #queue-info span { color: var(--gold); }
+
+  /* ANNOUNCEMENT TOAST */
+  #announcement-toast {
+    position: fixed; top: 52px; left: 0; right: 0; z-index: 999;
+    background: rgba(201,168,76,0.12); border-bottom: 1px solid rgba(201,168,76,0.25);
+    padding: 10px 24px; text-align: center;
+    font-size: 13px; color: var(--gold-light); letter-spacing: 0.03em;
+    transform: translateY(-100%); opacity: 0; transition: all 0.4s ease;
+    display: none;
+  }
+  #announcement-toast.visible { display: block; transform: translateY(0); opacity: 1; }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    padding: 120px 24px 80px;
+    background: radial-gradient(ellipse at 50% 40%, rgba(201,168,76,0.06) 0%, transparent 70%);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-eyebrow {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 24px; opacity: 0.8;
+  }
+  .hero-title {
+    font-family: 'Bebas Neue'; font-size: clamp(52px, 10vw, 120px);
+    line-height: 0.95; letter-spacing: 0.02em; margin-bottom: 28px;
+    background: linear-gradient(135deg, #fff 0%, #c8c8c8 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero-sub {
+    font-size: 14px; font-weight: 300; letter-spacing: 0.2em; text-transform: uppercase;
+    color: #888; margin-bottom: 48px;
+  }
+  .hero-stats { display: flex; gap: 48px; margin-bottom: 56px; }
+  .stat { text-align: center; }
+  .stat-num { font-family: 'Bebas Neue'; font-size: 48px; color: var(--gold); line-height: 1; }
+  .stat-label { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: #666; margin-top: 4px; }
+  .hero-ctas { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    padding: 14px 32px; font-family: 'Inter'; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase; text-decoration: none;
+    cursor: pointer; border: none; transition: all 0.2s;
+  }
+  .btn-primary { background: var(--gold); color: var(--black); }
+  .btn-primary:hover { background: var(--gold-light); transform: translateY(-1px); }
+  .btn-outline { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.25); }
+  .btn-outline:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* TICKER */
+  .ticker { background: var(--gold); padding: 12px 0; overflow: hidden; }
+  .ticker-track {
+    display: flex; gap: 0; white-space: nowrap;
+    animation: ticker 30s linear infinite;
+  }
+  .ticker-track:hover { animation-play-state: paused; }
+  .ticker-item {
+    font-family: 'Bebas Neue'; font-size: 14px; letter-spacing: 0.15em;
+    color: var(--black); padding: 0 20px;
+  }
+  @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+  /* SECTIONS */
+  section { padding: 100px 24px; max-width: 1100px; margin: 0 auto; }
+  .section-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 16px;
+  }
+  .section-title {
+    font-family: 'Playfair Display'; font-size: clamp(32px, 5vw, 52px);
+    font-weight: 700; line-height: 1.15; margin-bottom: 20px;
+  }
+  .section-title em { font-style: italic; color: var(--gold); }
+  .section-body { font-size: 15px; font-weight: 300; color: #888; line-height: 1.8; max-width: 560px; }
+  .divider { width: 40px; height: 1px; background: var(--gold); margin: 24px 0; opacity: 0.5; }
+
+  /* CARDS */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1px; margin-top: 56px; background: var(--border); }
+  .card {
+    background: var(--black); padding: 40px 32px;
+    transition: background 0.2s;
+  }
+  .card:hover { background: var(--mid); }
+  .card-icon { font-size: 28px; margin-bottom: 20px; }
+  .card-title { font-family: 'Playfair Display'; font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+  .card-body { font-size: 13px; color: #666; line-height: 1.7; }
+
+  /* SERVICES */
+  .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1px; margin-top: 56px; background: var(--border); }
+  .service-card {
+    background: var(--black); padding: 40px 32px;
+    display: flex; flex-direction: column; justify-content: space-between; min-height: 180px;
+    transition: background 0.2s;
+  }
+  .service-card:hover { background: var(--mid); }
+  .service-name { font-family: 'Playfair Display'; font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .service-desc { font-size: 13px; color: #666; line-height: 1.6; flex: 1; }
+  .service-price { font-family: 'Bebas Neue'; font-size: 28px; color: var(--gold); margin-top: 20px; letter-spacing: 0.05em; }
+
+  /* BOOKING FORM */
+  #booking { background: var(--mid); padding: 100px 24px; }
+  .form-inner { max-width: 680px; margin: 0 auto; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 48px; }
+  .form-full { grid-column: 1 / -1; }
+  .form-group { display: flex; flex-direction: column; gap: 8px; }
+  .form-group label { font-size: 11px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: #666; }
+  .form-group input, .form-group select, .form-group textarea {
+    background: var(--black); border: 1px solid var(--border); color: #fff;
+    padding: 14px 16px; font-family: 'Inter'; font-size: 14px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(201,168,76,0.08);
+  }
+  .form-group select option { background: var(--dark); }
+  .form-group textarea { resize: vertical; min-height: 100px; }
+  .form-submit { margin-top: 24px; }
+  .btn-submit {
+    width: 100%; padding: 18px; background: var(--gold); color: var(--black);
+    font-family: 'Inter'; font-size: 12px; font-weight: 700; letter-spacing: 0.15em;
+    text-transform: uppercase; border: none; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-submit:hover { background: var(--gold-light); }
+  .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* BOOKING STATUS */
+  #booking-status {
+    margin-top: 24px; padding: 20px 24px; border: 1px solid var(--border);
+    font-size: 14px; text-align: center; display: none;
+  }
+  #booking-status.pending { border-color: rgba(201,168,76,0.3); color: var(--gold); }
+  #booking-status.confirmed { border-color: rgba(80,200,120,0.3); color: #50c878; background: rgba(80,200,120,0.05); }
+  #booking-status.declined { border-color: rgba(255,80,80,0.3); color: #ff5050; background: rgba(255,80,80,0.05); }
+
+  /* WHY US */
+  .why-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1px; margin-top: 56px; background: var(--border); }
+  .why-card { background: var(--black); padding: 40px 32px; transition: background 0.2s; }
+  .why-card:hover { background: var(--mid); }
+  .why-icon { font-size: 32px; margin-bottom: 16px; }
+  .why-title { font-family: 'Bebas Neue'; font-size: 22px; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .why-body { font-size: 13px; color: #666; line-height: 1.7; }
+
+  /* CONTACT */
+  .contact-strip {
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    padding: 80px 24px; text-align: center;
+    background: radial-gradient(ellipse at 50% 50%, rgba(201,168,76,0.04) 0%, transparent 70%);
+  }
+  .contact-strip h2 { font-family: 'Playfair Display'; font-size: clamp(28px, 4vw, 44px); font-weight: 700; margin-bottom: 8px; }
+  .contact-strip p { color: #666; font-size: 14px; margin-bottom: 40px; }
+  .contact-links { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+  .contact-link {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 500; color: #888; text-decoration: none;
+    padding: 12px 20px; border: 1px solid var(--border);
+    transition: all 0.2s;
+  }
+  .contact-link:hover { border-color: var(--gold); color: var(--gold); }
+  .contact-link .icon { font-size: 18px; }
+
+  /* FOOTER */
+  footer {
+    padding: 32px 24px; text-align: center;
+    font-size: 12px; color: #444; letter-spacing: 0.05em;
+    border-top: 1px solid var(--border);
+  }
+  footer span { color: var(--gold); }
+
+  /* WHATSAPP FAB */
+  #wa-fab {
+    position: fixed; bottom: 24px; right: 24px; z-index: 900;
+    width: 52px; height: 52px; border-radius: 50%;
+    background: #25D366; display: flex; align-items: center; justify-content: center;
+    font-size: 24px; text-decoration: none; box-shadow: 0 4px 20px rgba(37,211,102,0.4);
+    transition: transform 0.2s;
+  }
+  #wa-fab:hover { transform: scale(1.08); }
+
+  /* SCROLL REVEAL */
+  .reveal { opacity: 0; transform: translateY(32px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 600px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .hero-stats { gap: 24px; }
+    .hero-ctas { flex-direction: column; align-items: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- STATUS BAR -->
+<div id="status-bar">
+  <div class="logo">✂ Uptown Barbershop</div>
+  <div class="right">
+    <div id="queue-info">Queue: <span id="queue-count">0</span></div>
+    <div id="shop-status" class="status-pill open">Open</div>
+  </div>
+</div>
+
+<!-- ANNOUNCEMENT -->
+<div id="announcement-toast" id="announcement"></div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-eyebrow">Est. 2018 · Abu Dhabi UAE</div>
+  <h1 class="hero-title">LEGENDS BEHIND<br>THE CHAIR</h1>
+  <p class="hero-sub">Masters of Fades · Braids · Dreadlocks</p>
+  <div class="hero-stats">
+    <div class="stat"><div class="stat-num">7+</div><div class="stat-label">Years</div></div>
+    <div class="stat"><div class="stat-num">2</div><div class="stat-label">Locations</div></div>
+    <div class="stat"><div class="stat-num">∞</div><div class="stat-label">Clean Fades</div></div>
+  </div>
+  <div class="hero-ctas">
+    <a href="#booking" class="btn btn-primary">Book Your Session</a>
+    <a href="#services" class="btn btn-outline">View Services</a>
+  </div>
+</section>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-track">
+    <span class="ticker-item">FADES ✦</span><span class="ticker-item">BRAIDS ✦</span>
+    <span class="ticker-item">DREADLOCKS ✦</span><span class="ticker-item">BEARD TRIMS ✦</span>
+    <span class="ticker-item">HOME SERVICE ✦</span><span class="ticker-item">WALK-INS WELCOME ✦</span>
+    <span class="ticker-item">OPEN 7 DAYS ✦</span><span class="ticker-item">ABU DHABI ✦</span>
+    <span class="ticker-item">SHARJAH ✦</span>
+    <span class="ticker-item">FADES ✦</span><span class="ticker-item">BRAIDS ✦</span>
+    <span class="ticker-item">DREADLOCKS ✦</span><span class="ticker-item">BEARD TRIMS ✦</span>
+    <span class="ticker-item">HOME SERVICE ✦</span><span class="ticker-item">WALK-INS WELCOME ✦</span>
+    <span class="ticker-item">OPEN 7 DAYS ✦</span><span class="ticker-item">ABU DHABI ✦</span>
+    <span class="ticker-item">SHARJAH ✦</span>
+  </div>
+</div>
+
+<!-- ABOUT -->
+<section id="about">
+  <div class="reveal">
+    <div class="section-label">Our Story</div>
+    <h2 class="section-title">Where every cut<br>is <em>a statement</em></h2>
+    <div class="divider"></div>
+    <p class="section-body">Since 2018, Uptown Barbershop has been the go-to destination for precision cuts in Abu Dhabi. From signature fades to intricate braids, our master barbers bring artistry and skill to every appointment.</p>
+  </div>
+  <div class="cards">
+    <div class="card reveal"><div class="card-icon">✂</div><div class="card-title">Master Fades</div><div class="card-body">Precision skin fades, tapers, and blends — clean lines every time.</div></div>
+    <div class="card reveal"><div class="card-icon">💈</div><div class="card-title">Classic Cuts</div><div class="card-body">Timeless styles crafted with expert technique and attention to detail.</div></div>
+    <div class="card reveal"><div class="card-icon">🪢</div><div class="card-title">Braids & Locs</div><div class="card-body">From cornrows to dreadlocks — we know texture, we respect culture.</div></div>
+    <div class="card reveal"><div class="card-icon">🏠</div><div class="card-title">Home Service</div><div class="card-body">Can't make it in? We bring the barbershop to your door.</div></div>
+  </div>
+</section>
+
+<!-- SERVICES -->
+<section id="services" style="background: var(--mid); max-width: 100%; padding: 100px 24px;">
+  <div style="max-width: 1100px; margin: 0 auto;">
+    <div class="reveal">
+      <div class="section-label">What We Offer</div>
+      <h2 class="section-title">Our <em>Services</em></h2>
+      <div class="divider"></div>
+    </div>
+    <div class="services-grid">
+      <div class="service-card reveal">
+        <div><div class="service-name">Signature Fade</div><div class="service-desc">Our most popular cut. A precision skin fade tailored to your shape.</div></div>
+        <div class="service-price">AED 50</div>
+      </div>
+      <div class="service-card reveal">
+        <div><div class="service-name">Classic Haircut</div><div class="service-desc">Scissors or clipper cut — clean, sharp, and styled.</div></div>
+        <div class="service-price">AED 40</div>
+      </div>
+      <div class="service-card reveal">
+        <div><div class="service-name">Beard Trim</div><div class="service-desc">Shaping, lining, and grooming for the perfect beard.</div></div>
+        <div class="service-price">AED 35</div>
+      </div>
+      <div class="service-card reveal">
+        <div><div class="service-name">Braids</div><div class="service-desc">Cornrows, box braids, and more — style that lasts.</div></div>
+        <div class="service-price">AED 80</div>
+      </div>
+      <div class="service-card reveal">
+        <div><div class="service-name">Dreadlocks</div><div class="service-desc">New locs, maintenance, and retwist by experienced hands.</div></div>
+        <div class="service-price">AED 100</div>
+      </div>
+      <div class="service-card reveal">
+        <div><div class="service-name">Home Service</div><div class="service-desc">We come to you. Full service at your location.</div></div>
+        <div class="service-price">CALL FOR PRICING</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BOOKING FORM -->
+<div id="booking" style="background: var(--dark); padding: 100px 24px;">
+  <div class="form-inner">
+    <div class="reveal">
+      <div class="section-label">Book Now</div>
+      <h2 class="section-title">Reserve Your <em>Chair</em></h2>
+      <div class="divider"></div>
+      <p class="section-body">Fill in the form below and we'll confirm your booking instantly.</p>
+    </div>
+    <form id="booking-form">
+      <div class="form-grid">
+        <div class="form-group"><label>Full Name</label><input type="text" id="f-name" placeholder="Your name" required></div>
+        <div class="form-group"><label>Phone Number</label><input type="tel" id="f-phone" placeholder="+971 XX XXX XXXX" required></div>
+        <div class="form-group"><label>Service</label>
+          <select id="f-service" required>
+            <option value="">Select a service</option>
+            <option>Signature Fade — AED 50</option>
+            <option>Classic Haircut — AED 40</option>
+            <option>Beard Trim — AED 35</option>
+            <option>Braids — AED 80</option>
+            <option>Dreadlocks — AED 100</option>
+            <option>Home Service</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Location</label>
+          <select id="f-location" required>
+            <option value="">Select location</option>
+            <option>Abu Dhabi</option>
+            <option>Sharjah</option>
+            <option>Home Visit</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Date</label><input type="date" id="f-date" required></div>
+        <div class="form-group"><label>Time</label><input type="time" id="f-time" required></div>
+        <div class="form-group form-full"><label>Notes (optional)</label><textarea id="f-notes" placeholder="Any requests or special instructions…"></textarea></div>
+      </div>
+      <div class="form-submit"><button type="submit" class="btn-submit">Confirm Booking</button></div>
+    </form>
+    <div id="booking-status"></div>
+  </div>
+</div>
+
+<!-- WHY US -->
+<section id="why">
+  <div class="reveal">
+    <div class="section-label">Why Uptown</div>
+    <h2 class="section-title">Built for the <em>culture</em></h2>
+    <div class="divider"></div>
+  </div>
+  <div class="why-grid">
+    <div class="why-card reveal"><div class="why-icon">🏆</div><div class="why-title">Master Barbers</div><div class="why-body">Every barber is trained, experienced, and passionate about their craft.</div></div>
+    <div class="why-card reveal"><div class="why-icon">📅</div><div class="why-title">Open 7 Days</div><div class="why-body">No day off. We're here when you need a fresh cut.</div></div>
+    <div class="why-card reveal"><div class="why-icon">🚶</div><div class="why-title">Walk-Ins Welcome</div><div class="why-body">No appointment? No problem. Come in and we'll take care of you.</div></div>
+    <div class="why-card reveal"><div class="why-icon">📍</div><div class="why-title">2 Locations</div><div class="why-body">Abu Dhabi and Sharjah — always close to where you are.</div></div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<div class="contact-strip">
+  <h2>Ready for a fresh cut?</h2>
+  <p>Call, WhatsApp, or find us on Instagram</p>
+  <div class="contact-links">
+    <a href="tel:024451214" class="contact-link"><span class="icon">📞</span> 02 445 1214</a>
+    <a href="https://wa.me/971524451214" class="contact-link" target="_blank"><span class="icon">💬</span> WhatsApp</a>
+    <a href="https://instagram.com/uptown.barbershop" class="contact-link" target="_blank"><span class="icon">📸</span> @uptown.barbershop</a>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>© 2026 <span>Uptown Barbershop</span> · Abu Dhabi, UAE</footer>
+
+<!-- WHATSAPP FAB -->
+<a href="https://wa.me/971524451214" id="wa-fab" target="_blank">💬</a>
+
+<script>
+  const socket = io();
+  let myBookingId = null;
+
+  // ── Live state updates ──────────────────────────────────────
+  socket.on('state-update', (s) => {
+    document.getElementById('queue-count').textContent = s.queueCount;
+    const pill = document.getElementById('shop-status');
+    pill.textContent = s.isOpen ? 'Open' : 'Closed';
+    pill.className = 'status-pill ' + (s.isOpen ? 'open' : 'closed');
+
+    const toast = document.getElementById('announcement-toast');
+    if (s.announcement && s.announcement.trim()) {
+      toast.textContent = '📣 ' + s.announcement;
+      toast.classList.add('visible');
+    } else {
+      toast.classList.remove('visible');
+    }
+  });
+
+  // ── Booking status for this customer ───────────────────────
+  socket.on('booking-status', ({ id, status }) => {
+    if (id !== myBookingId) return;
+    const el = document.getElementById('booking-status');
+    if (status === 'confirmed') {
+      el.className = 'confirmed';
+      el.textContent = '✅ Your booking is confirmed! We look forward to seeing you.';
+    } else if (status === 'declined') {
+      el.className = 'declined';
+      el.textContent = '❌ Sorry, we couldn\'t confirm this slot. Please call us to rebook: 02 445 1214';
+    }
+  });
+
+  // ── Booking form submit ─────────────────────────────────────
+  document.getElementById('booking-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('.btn-submit');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    const payload = {
+      name: document.getElementById('f-name').value,
+      phone: document.getElementById('f-phone').value,
+      service: document.getElementById('f-service').value,
+      location: document.getElementById('f-location').value,
+      date: document.getElementById('f-date').value,
+      time: document.getElementById('f-time').value,
+      notes: document.getElementById('f-notes').value,
+    };
+
+    try {
+      const res = await fetch('/api/booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        myBookingId = data.bookingId;
+        const el = document.getElementById('booking-status');
+        el.style.display = 'block';
+        el.className = 'pending';
+        el.textContent = '⏳ Booking received — waiting for confirmation from the shop…';
+        btn.textContent = 'Booking Sent';
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Confirm Booking';
+        alert('Error: ' + (data.error || 'Please try again'));
+      }
+    } catch {
+      btn.disabled = false;
+      btn.textContent = 'Confirm Booking';
+      alert('Connection error. Please try again.');
+    }
+  });
+
+  // ── Scroll reveal ────────────────────────────────────────────
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  // Set min date to today
+  document.getElementById('f-date').min = new Date().toISOString().split('T')[0];
+</script>
+</body>
+</html>

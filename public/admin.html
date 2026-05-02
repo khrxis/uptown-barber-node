@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uptown Admin</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --gold: #C9A84C;
+    --gold-light: #e8c96a;
+    --black: #0A0A0A;
+    --dark: #111;
+    --mid: #161616;
+    --border: rgba(201,168,76,0.15);
+    --green: #50c878;
+    --red: #ff5555;
+  }
+  body { background: var(--black); color: #fff; font-family: system-ui, sans-serif; font-size: 14px; }
+
+  /* HEADER */
+  header {
+    background: var(--dark); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 16px; font-weight: 700; letter-spacing: 0.05em; color: var(--gold); }
+  .logo span { color: #fff; }
+  #conn-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #444;
+    display: inline-block; margin-right: 6px; transition: background 0.3s;
+  }
+  #conn-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  #conn-label { font-size: 12px; color: #666; }
+
+  /* LAYOUT */
+  .layout { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 57px); }
+  .sidebar { background: var(--dark); border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+  .main { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* SIDEBAR BLOCKS */
+  .block-title { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: #444; margin-bottom: 12px; }
+
+  /* SHOP TOGGLE */
+  #shop-btn {
+    width: 100%; padding: 14px; font-size: 13px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; border: none; cursor: pointer; transition: all 0.2s;
+    background: rgba(80,200,120,0.12); color: var(--green); border: 1px solid rgba(80,200,120,0.2);
+  }
+  #shop-btn.closed { background: rgba(255,85,85,0.1); color: var(--red); border-color: rgba(255,85,85,0.2); }
+
+  /* BARBERS */
+  .barber-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .barber-row:last-child { border-bottom: none; }
+  .barber-name { font-weight: 500; }
+  .barber-status { font-size: 11px; color: #666; margin-top: 2px; }
+  .toggle {
+    width: 44px; height: 24px; border-radius: 12px; border: none; cursor: pointer;
+    position: relative; transition: background 0.2s; background: #333;
+  }
+  .toggle::after {
+    content: ''; position: absolute; top: 3px; left: 3px;
+    width: 18px; height: 18px; border-radius: 50%; background: #666; transition: all 0.2s;
+  }
+  .toggle.on { background: rgba(80,200,120,0.2); border: 1px solid var(--green); }
+  .toggle.on::after { background: var(--green); transform: translateX(20px); }
+
+  /* QUEUE */
+  .queue-display {
+    font-size: 48px; font-weight: 700; color: var(--gold); text-align: center;
+    padding: 16px 0; line-height: 1;
+  }
+  .queue-label { text-align: center; font-size: 11px; color: #666; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 4px; }
+
+  /* ANNOUNCEMENT */
+  #announce-text {
+    width: 100%; background: var(--black); border: 1px solid var(--border);
+    color: #fff; padding: 10px 12px; font-size: 13px; font-family: system-ui;
+    resize: none; height: 72px; outline: none; margin-bottom: 8px;
+    transition: border-color 0.2s;
+  }
+  #announce-text:focus { border-color: var(--gold); }
+  #announce-btn {
+    width: 100%; padding: 10px; background: var(--gold); color: var(--black);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    border: none; cursor: pointer; transition: background 0.2s;
+  }
+  #announce-btn:hover { background: var(--gold-light); }
+  #clear-btn {
+    width: 100%; margin-top: 6px; padding: 8px; background: transparent;
+    color: #555; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    border: 1px solid #333; cursor: pointer; transition: all 0.2s;
+  }
+  #clear-btn:hover { border-color: #666; color: #888; }
+
+  /* BOOKINGS FEED */
+  .feed-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  .feed-header h2 { font-size: 16px; font-weight: 600; }
+  .feed-count { font-size: 12px; color: #666; }
+
+  /* FILTERS */
+  .filters { display: flex; gap: 8px; }
+  .filter-btn {
+    padding: 6px 14px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; border: 1px solid var(--border); background: transparent;
+    color: #666; cursor: pointer; transition: all 0.15s;
+  }
+  .filter-btn.active { border-color: var(--gold); color: var(--gold); }
+
+  /* BOOKING CARDS */
+  #bookings-list { display: flex; flex-direction: column; gap: 12px; }
+  .booking-card {
+    background: var(--mid); border: 1px solid var(--border);
+    padding: 20px; display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; transition: border-color 0.2s; animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  .booking-card.new-highlight { border-color: var(--gold); }
+  .booking-card.confirmed { border-left: 3px solid var(--green); }
+  .booking-card.declined { border-left: 3px solid var(--red); opacity: 0.6; }
+  .booking-card.completed { border-left: 3px solid #555; opacity: 0.5; }
+  .booking-info { flex: 1; min-width: 0; }
+  .booking-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+  .booking-meta { font-size: 12px; color: #888; line-height: 1.6; }
+  .booking-meta strong { color: #bbb; }
+  .booking-notes { font-size: 12px; color: var(--gold); margin-top: 6px; font-style: italic; }
+  .booking-time { font-size: 11px; color: #555; margin-top: 6px; }
+  .booking-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+  .action-btn {
+    padding: 7px 16px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; border: none; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-confirm { background: rgba(80,200,120,0.15); color: var(--green); border: 1px solid rgba(80,200,120,0.25); }
+  .btn-confirm:hover { background: rgba(80,200,120,0.25); }
+  .btn-decline { background: rgba(255,85,85,0.1); color: var(--red); border: 1px solid rgba(255,85,85,0.2); }
+  .btn-decline:hover { background: rgba(255,85,85,0.2); }
+  .btn-done { background: rgba(255,255,255,0.05); color: #666; border: 1px solid #333; }
+  .status-badge {
+    display: inline-block; padding: 3px 10px; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase; border-radius: 2px;
+  }
+  .status-badge.pending { background: rgba(201,168,76,0.1); color: var(--gold); }
+  .status-badge.confirmed { background: rgba(80,200,120,0.1); color: var(--green); }
+  .status-badge.declined { background: rgba(255,85,85,0.1); color: var(--red); }
+  .status-badge.completed { background: rgba(255,255,255,0.05); color: #555; }
+
+  .empty-state { text-align: center; padding: 60px 24px; color: #444; }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 13px; }
+
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">✂ Uptown <span>Admin</span></div>
+  <div>
+    <span id="conn-dot"></span>
+    <span id="conn-label">Connecting…</span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- Shop status -->
+    <div>
+      <div class="block-title">Shop Status</div>
+      <button id="shop-btn" onclick="toggleShop()">🟢 SHOP: OPEN</button>
+    </div>
+
+    <!-- Queue -->
+    <div>
+      <div class="block-title">Queue</div>
+      <div class="queue-display" id="queue-num">0</div>
+      <div class="queue-label">Pending bookings</div>
+    </div>
+
+    <!-- Barbers -->
+    <div>
+      <div class="block-title">Barbers On Duty</div>
+      <div id="barbers-list"></div>
+    </div>
+
+    <!-- Announcement -->
+    <div>
+      <div class="block-title">Push Announcement</div>
+      <textarea id="announce-text" placeholder="e.g. 45 min wait today, walk-ins welcome…"></textarea>
+      <button id="announce-btn" onclick="pushAnnouncement()">Push Live</button>
+      <button id="clear-btn" onclick="clearAnnouncement()">Clear Announcement</button>
+    </div>
+
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="feed-header">
+      <h2>Live Booking Feed</h2>
+      <span class="feed-count" id="feed-count">0 bookings</span>
+    </div>
+    <div class="filters">
+      <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+      <button class="filter-btn" onclick="setFilter('pending', this)">Pending</button>
+      <button class="filter-btn" onclick="setFilter('confirmed', this)">Confirmed</button>
+      <button class="filter-btn" onclick="setFilter('declined', this)">Declined</button>
+    </div>
+    <div id="bookings-list">
+      <div class="empty-state"><div class="icon">📋</div><p>No bookings yet. They'll appear here in real time.</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const socket = io();
+  let allBookings = [];
+  let barbers = [];
+  let shopOpen = true;
+  let currentFilter = 'all';
+
+  // ── Connection ──────────────────────────────────────────────
+  socket.on('connect', () => {
+    document.getElementById('conn-dot').className = 'connected';
+    document.getElementById('conn-label').textContent = 'Connected';
+    socket.emit('admin-join');
+  });
+  socket.on('disconnect', () => {
+    document.getElementById('conn-dot').className = '';
+    document.getElementById('conn-label').textContent = 'Disconnected';
+  });
+
+  // ── Admin init (full state) ─────────────────────────────────
+  socket.on('admin-init', (data) => {
+    allBookings = data.bookings || [];
+    barbers = data.barbers || [];
+    shopOpen = data.state?.isOpen ?? true;
+    renderBookings();
+    renderBarbers();
+    updateShopBtn();
+  });
+
+  // ── New booking pops up ─────────────────────────────────────
+  socket.on('new-booking', (booking) => {
+    allBookings.unshift(booking);
+    renderBookings(booking.id);
+    playPing();
+  });
+
+  // ── Booking updated ─────────────────────────────────────────
+  socket.on('booking-updated', (updated) => {
+    const idx = allBookings.findIndex(b => b.id === updated.id);
+    if (idx !== -1) allBookings[idx] = updated;
+    renderBookings();
+  });
+
+  // ── State update ─────────────────────────────────────────────
+  socket.on('state-update', (s) => {
+    document.getElementById('queue-num').textContent = s.queueCount;
+    shopOpen = s.isOpen;
+    updateShopBtn();
+  });
+
+  // ── Render bookings ─────────────────────────────────────────
+  function renderBookings(highlightId = null) {
+    const list = document.getElementById('bookings-list');
+    const filtered = currentFilter === 'all'
+      ? allBookings
+      : allBookings.filter(b => b.status === currentFilter);
+
+    document.getElementById('feed-count').textContent = allBookings.length + ' booking' + (allBookings.length !== 1 ? 's' : '');
+
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>' +
+        (currentFilter === 'all' ? 'No bookings yet. They\'ll appear here in real time.' : 'No ' + currentFilter + ' bookings.') +
+        '</p></div>';
+      return;
+    }
+
+    list.innerHTML = filtered.map(b => {
+      const isNew = b.id === highlightId;
+      const ts = new Date(b.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      const actions = b.status === 'pending'
+        ? `<button class="action-btn btn-confirm" onclick="bookingAction('${b.id}','confirmed')">Confirm</button>
+           <button class="action-btn btn-decline" onclick="bookingAction('${b.id}','declined')">Decline</button>`
+        : b.status === 'confirmed'
+        ? `<button class="action-btn btn-done" onclick="bookingAction('${b.id}','completed')">Mark Done</button>`
+        : '';
+      return `<div class="booking-card ${b.status} ${isNew ? 'new-highlight' : ''}" id="card-${b.id}">
+        <div class="booking-info">
+          <div class="booking-name">${b.name} <span class="status-badge ${b.status}">${b.status}</span></div>
+          <div class="booking-meta">
+            <strong>${b.service}</strong> · ${b.location}<br>
+            📅 ${b.date} at ${b.time} · 📞 ${b.phone}
+          </div>
+          ${b.notes ? `<div class="booking-notes">💬 "${b.notes}"</div>` : ''}
+          <div class="booking-time">Received: ${ts}</div>
+        </div>
+        <div class="booking-actions">${actions}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Render barbers ──────────────────────────────────────────
+  function renderBarbers() {
+    document.getElementById('barbers-list').innerHTML = barbers.map(b => `
+      <div class="barber-row">
+        <div>
+          <div class="barber-name">${b.name}</div>
+          <div class="barber-status">${b.available ? 'On duty' : 'Off'}</div>
+        </div>
+        <button class="toggle ${b.available ? 'on' : ''}" onclick="toggleBarber(${b.id})" title="Toggle ${b.name}"></button>
+      </div>
+    `).join('');
+  }
+
+  function updateShopBtn() {
+    const btn = document.getElementById('shop-btn');
+    btn.textContent = shopOpen ? '🟢 SHOP: OPEN' : '🔴 SHOP: CLOSED';
+    btn.className = shopOpen ? '' : 'closed';
+  }
+
+  // ── Actions ──────────────────────────────────────────────────
+  function bookingAction(id, action) {
+    socket.emit('booking-action', { id, action });
+  }
+  function toggleBarber(id) {
+    socket.emit('toggle-barber', { id });
+  }
+  function toggleShop() {
+    socket.emit('toggle-open');
+  }
+  function pushAnnouncement() {
+    const text = document.getElementById('announce-text').value.trim();
+    socket.emit('set-announcement', { text });
+    if (text) showToast('Announcement pushed live');
+  }
+  function clearAnnouncement() {
+    document.getElementById('announce-text').value = '';
+    socket.emit('set-announcement', { text: '' });
+    showToast('Announcement cleared');
+  }
+  function setFilter(f, btn) {
+    currentFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderBookings();
+  }
+
+  // ── Audio ping ───────────────────────────────────────────────
+  function playPing() {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start(); osc.stop(ctx.currentTime + 0.4);
+    } catch {}
+  }
+
+  // ── Toast ────────────────────────────────────────────────────
+  function showToast(msg) {
+    let t = document.getElementById('_toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = '_toast';
+      t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid rgba(201,168,76,0.3);color:#C9A84C;padding:10px 20px;font-size:13px;font-weight:600;z-index:9999;pointer-events:none;transition:opacity 0.3s;';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg; t.style.opacity = '1';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2000);
+  }
+</script>
+</body>
+</html>
