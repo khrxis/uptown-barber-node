@@ -95,8 +95,8 @@ app.get('/login', (req, res) => {
 });
 
 app.post('/login', (req, res) => {
-  if (req.body.password === ADMIN_PASSWORD) {
-    res.cookie('admin_auth', ADMIN_PASSWORD, { httpOnly: true, maxAge: 8 * 60 * 60 * 1000 });
+  if ((req.body.password || '').trim() === ADMIN_PASSWORD) {
+    res.cookie('admin_auth', 'granted', { httpOnly: true, sameSite: 'lax', maxAge: 8 * 60 * 60 * 1000 });
     res.redirect('/admin.html');
   } else {
     res.redirect('/login?error=1');
@@ -106,7 +106,7 @@ app.post('/login', (req, res) => {
 // Protect admin.html
 app.use('/admin.html', (req, res, next) => {
   const cookie = req.headers.cookie || '';
-  const valid = cookie.split(';').some(c => c.trim() === `admin_auth=${ADMIN_PASSWORD}`);
+  const valid = cookie.split(';').some(c => c.trim() === 'admin_auth=granted');
   if (valid) return next();
   res.redirect('/login');
 });
